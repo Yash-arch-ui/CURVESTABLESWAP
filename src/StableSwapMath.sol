@@ -66,4 +66,10 @@ contract StableSwapMath {
 
         return D;
     }
+
+    function get_virtual_price(uint256 lpSupply, uint256 _A, uint256[3] memory balances) public pure returns (uint256){
+       uint256 _D = getD(balances,_A);
+       uint256 virtualprice = (_D*1e18)/ lpSupply ;
+       return virtualprice;
+    }
 }
