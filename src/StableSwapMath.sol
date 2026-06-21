@@ -147,4 +147,13 @@ contract StableSwapMath {
 
     return dy;
 }
+
+function exchange(uint256 i, uint256 j , uint256 dx, uint256[3] memory _balances, uint256 amp)public pure returns(uint256){
+    require(i != j, "SAME CURRENCY");
+    uint256[3] memory balances=_balances;
+    uint256 dy =getDy(i,j,dx,balances,amp);
+    balances[i] += dx; 
+    balances[j] -=dy;
+    return dy ;
+}
 }
