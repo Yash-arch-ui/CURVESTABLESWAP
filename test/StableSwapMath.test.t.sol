@@ -8,7 +8,7 @@ contract StableSwapMathTest is Test{
     uint256 public constant deposit_one=100e18;
     uint256 public constant deposit_two=100e6;
     function setUp() public {
-      pool = new StableSwapMath();
+      pool = new StableSwapMath([uint256(100e18), uint256(100e6), uint256(100e6)]);
     } 
     // _xp() tests
     function testDAIstaysunchanged() public {
