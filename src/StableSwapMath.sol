@@ -7,11 +7,15 @@ contract StableSwapMath {
     uint256 public constant _MAX_ITERATIONS = 255;
     uint256 public constant _N_COINS = 3;
     uint256 public constant DEFAULT_A = 100;
-
-    function _xp(
-        uint256[3] memory balances
-    ) public pure returns (uint256[3] memory xp) {
-
+    uint256[3] public  balances;
+    uint256 public totalSupply;
+    uint256[3] public amounts;
+    
+    constructor(uint256[3] memory initialBalances){
+        balances = initialBalances;
+        totalSupply=0;
+    }
+    function _xp() public view returns (uint256[3] memory xp) {
         xp[0] = balances[0];
         xp[1] = balances[1] * _MULTIPLICATION_FACTOR;
         xp[2] = balances[2] * _MULTIPLICATION_FACTOR;
@@ -19,7 +23,7 @@ contract StableSwapMath {
         return xp;
     }
 
-    function _getD( uint256[3] memory xp, uint256 amp ) public pure returns (uint256 D) {
+    function _getD( uint256[3] memory xp, uint256 amp ) public  view returns (uint256 D) {
 
         uint256 S;
         for (uint256 i = 0; i < _N_COINS; i++) {
@@ -52,28 +56,27 @@ contract StableSwapMath {
         return D;
     }
 
-    function getD(  uint256[3] memory balances,  uint256 amp ) public pure returns (uint256) {
+    function getD( uint256 amp ) public view returns (uint256) {
 
-        uint256[3] memory xp = _xp(balances);
+        (uint256[3] memory xp) = _xp();
         return _getD(xp, amp);
     }
 
     function get_virtual_price(
         uint256 lpSupply,
-        uint256 amp,
-        uint256[3] memory balances
-    ) public pure returns (uint256) {
+        uint256 amp
+    ) public view returns (uint256) {
 
         uint256 D = getD(balances, amp);
 
         return (D * 1e18) / lpSupply;
     }
 
-    function getY( uint256 i, uint256 j, uint256 x, uint256[3] memory balances, uint256 amp
-    ) public pure returns (uint256 y) {
+    function getY( uint256 i, uint256 j, uint256 x, uint256 amp
+    ) public view returns (uint256 y) {
        // getY(i=0,j=1,x=110,xp) where xp=[100,100,100]
         require(i != j, "same coin");
-        uint256[3] memory xp = _xp(balances);
+        (uint256[3] memory xp) = _xp(balances);
         uint256 D = _getD(xp, amp);
         uint256 Ann = amp * _N_COINS;
         uint256 c = D;
@@ -113,12 +116,12 @@ contract StableSwapMath {
 
         return y;
     }
-      function getDy( uint256 i, uint256 j, uint256 dx, uint256[3] memory balances, uint256 amp
-) public pure returns (uint256 dy) {
+      function getDy( uint256 i, uint256 j, uint256 dx,uint256 amp
+) public view returns (uint256 dy) {
     require(i != j, "same coin");
     require(i < _N_COINS && j < _N_COINS, "invalid index");
 
-    uint256[3] memory xp = _xp(balances);
+   ( uint256[3] memory xp) = _xp(balances);
     uint256 x = xp[i];
     if (i == 0) {
         // DAI (18 decimals)
@@ -148,12 +151,101 @@ contract StableSwapMath {
     return dy;
 }
 
-function exchange(uint256 i, uint256 j , uint256 dx, uint256[3] memory _balances, uint256 amp)public pure returns(uint256){
+function exchange(uint256 i, uint256 j , uint256 dx, uint256 amp)public view returns(uint256){
     require(i != j, "SAME CURRENCY");
-    uint256[3] memory balances=_balances;
     uint256 dy =getDy(i,j,dx,balances,amp);
-    balances[i] += dx; 
+   balances[i] += dx; 
     balances[j] -=dy;
     return dy ;
+}
+
+function calculateAmountOut(uint256 amp , uint256 _totalSupply, uint256[3] memory amounts, bool deposit) public view returns(uint256){
+    totalSupply = _totalSupply;
+     uint256[3] memory oldBalances= balances;
+     uint256 D0 = getD(oldBalances, amp);
+     uint256[3] memory newBalances = oldBalances;
+        for (uint256 i = 0; i < _N_COINS; i++) {
+        if (deposit) {
+            newBalances[i] += amounts[i];
+        } else {
+            newBalances[i] -= amounts[i];
+        }
+    }
+    uint256 D1 = getD(newBalances, amp);
+    if(totalSupply == 0){return D1;
+    }
+    if(deposit){
+         uint256 lpAmount =(( D1-D0) *totalSupply)/D0;
+    }else{
+        uint256 lpAmount = ((D0 - D1) * totalSupply) / D0;
+    }
+    return lpAmount;
+    _totalSupply = totalSupply;
+    /* DAI  = 100
+       USDC = 100
+       USDT = 100
+
+
+       Suppose-D0 = 300,LP Supply = 300
+       User deposits:10 DAI,10 USDC,10 USDT
+       New balances:110,110,110
+
+       New liquidity
+       D1 = 330
+       LP minted
+
+        (D1 - D0) * supply / D0 = (330 - 300) * 300 / 300 = 30 , which user gets as LP Tokens 
+        LP Ownership is proportional 
+
+
+
+    */
+}
+
+function addLiquididty( uint256[3] memory amounts, uint256 amp) public view returns (uint256){
+    uint256 lpMinted= calculateAmountOut(amp,totalSupply,amounts,true);
+        for (uint256 i = 0; i < _N_COINS; i++) {
+        balances[i] += amounts[i];
+    }
+    totalSupply += lpMinted;
+    return lpMinted;
+
+}
+
+function removeLiquidity(uint256 lpAmount) public  returns(uint256){
+    require(totalSupply >0 , "NO LIquidity");
+    uint256 share = (lpAmount * 1e18)/ totalSupply;
+    totalSupply -= lpAmount;
+    for(uint256 i =0 ; i< _N_COINS;i++){
+        amounts[i] = (balances [i]*share) / 1e18;
+        balances[i] -= amounts[i];
+    }
+    return amounts;
+}
+function removeLiquidityOneCoin( uint256 lpAmount, uint256 i, uint256 amp) external returns (uint256 dy) {
+
+    require(i < _N_COINS, "invalid coin");
+    require(totalSupply > 0, "no supply");
+    uint256 share = (lpAmount * 1e18) / totalSupply;
+    totalSupply -= lpAmount;
+    uint256[3] memory xp = balances;
+    uint256[3] memory newBalances;
+
+    for (uint256 k = 0; k < _N_COINS; k++) {
+        uint256 removed = (balances[k] * share) / 1e18;
+        newBalances[k] = balances[k] - removed;
+    }
+    uint256 D = getD(xp, amp);
+    uint256 x = newBalances[i];
+
+    uint256 y = getY( i, i, x,  newBalances,amp
+    );
+    dy = xp[i] - y;
+
+    for (uint256 k = 0; k < _N_COINS; k++) {
+        balances[k] = newBalances[k];
+    }
+
+    return dy;
 }
 }
