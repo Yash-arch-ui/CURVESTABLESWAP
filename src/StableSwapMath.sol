@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 contract StableSwapMath {
-
     uint256 public constant _MULTIPLICATION_FACTOR = 1e12;
     uint256 public constant _MAX_ITERATIONS = 255;
     uint256 public constant _N_COINS = 3;
@@ -24,10 +23,7 @@ contract StableSwapMath {
         return xp;
     }
 
-    function _getD(
-        uint256[3] memory xp,
-        uint256 amp
-    ) public pure returns (uint256 D) {
+    function _getD(uint256[3] memory xp, uint256 amp) public pure returns (uint256 D) {
         uint256 S;
 
         for (uint256 i = 0; i < _N_COINS; i++) {
@@ -50,9 +46,7 @@ contract StableSwapMath {
 
             uint256 Dprev = D;
 
-            D =
-                ((Ann * S + D_P * _N_COINS) * D) /
-                ((Ann - 1) * D + (_N_COINS + 1) * D_P);
+            D = ((Ann * S + D_P * _N_COINS) * D) / ((Ann - 1) * D + (_N_COINS + 1) * D_P);
 
             if (D > Dprev) {
                 if (D - Dprev <= 1) {
@@ -68,28 +62,17 @@ contract StableSwapMath {
         return D;
     }
 
-    function getD(
-        uint256[3] memory balances_,
-        uint256 amp
-    ) public pure returns (uint256) {
+    function getD(uint256[3] memory balances_, uint256 amp) public pure returns (uint256) {
         uint256[3] memory xp = _xp(balances_);
         return _getD(xp, amp);
     }
 
-    function get_virtual_price(
-        uint256 lpSupply,
-        uint256 amp
-    ) public view returns (uint256) {
+    function get_virtual_price(uint256 lpSupply, uint256 amp) public view returns (uint256) {
         uint256 D = getD(balances, amp);
         return (D * 1e18) / lpSupply;
     }
 
-    function getY(
-        uint256 i,
-        uint256 j,
-        uint256 x,
-        uint256 amp
-    ) public view returns (uint256 y) {
+    function getY(uint256 i, uint256 j, uint256 x, uint256 amp) public view returns (uint256 y) {
         require(i != j, "same coin");
 
         uint256[3] memory xp = _xp(balances);
@@ -140,8 +123,7 @@ contract StableSwapMath {
         return y;
     }
 
-    function getDy( uint256 i, uint256 j, uint256 dx, uint256 amp
-    ) public view returns (uint256 dy) {
+    function getDy(uint256 i, uint256 j, uint256 dx, uint256 amp) public view returns (uint256 dy) {
         require(i != j, "same coin");
         require(i < _N_COINS && j < _N_COINS, "invalid index");
 
@@ -168,12 +150,7 @@ contract StableSwapMath {
         return dy;
     }
 
-    function exchange(
-        uint256 i,
-        uint256 j,
-        uint256 dx,
-        uint256 amp
-    ) public returns (uint256) {
+    function exchange(uint256 i, uint256 j, uint256 dx, uint256 amp) public returns (uint256) {
         require(i != j, "SAME CURRENCY");
 
         uint256 dy = getDy(i, j, dx, amp);
@@ -184,12 +161,11 @@ contract StableSwapMath {
         return dy;
     }
 
-    function calculateAmountOut(
-        uint256 amp,
-        uint256 _totalSupply,
-        uint256[3] memory amounts_,
-        bool deposit
-    ) public view returns (uint256 lpAmount) {
+    function calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit)
+        public
+        view
+        returns (uint256 lpAmount)
+    {
         uint256[3] memory oldBalances = balances;
 
         uint256 D0 = getD(oldBalances, amp);
@@ -219,12 +195,8 @@ contract StableSwapMath {
         return lpAmount;
     }
 
-    function addLiquididty(
-        uint256[3] memory amounts_,
-        uint256 amp
-    ) public returns (uint256) {
-        uint256 lpMinted =
-            calculateAmountOut(amp, totalSupply, amounts_, true);
+    function addLiquididty(uint256[3] memory amounts_, uint256 amp) public returns (uint256) {
+        uint256 lpMinted = calculateAmountOut(amp, totalSupply, amounts_, true);
 
         for (uint256 i = 0; i < _N_COINS; i++) {
             balances[i] += amounts_[i];
@@ -235,9 +207,7 @@ contract StableSwapMath {
         return lpMinted;
     }
 
-    function removeLiquidity(
-        uint256 lpAmount
-    ) public returns (uint256[3] memory) {
+    function removeLiquidity(uint256 lpAmount) public returns (uint256[3] memory) {
         require(totalSupply > 0, "NO LIQUIDITY");
 
         uint256 share = (lpAmount * 1e18) / totalSupply;
@@ -252,11 +222,7 @@ contract StableSwapMath {
         return amounts;
     }
 
-    function removeLiquidityOneCoin(
-        uint256 lpAmount,
-        uint256 i,
-        uint256 amp
-    ) external returns (uint256 dy) {
+    function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp) external returns (uint256 dy) {
         require(i < _N_COINS, "invalid coin");
         require(totalSupply > 0, "no supply");
 
