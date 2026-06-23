@@ -140,11 +140,7 @@ contract StableSwapMath {
         return y;
     }
 
-    function getDy(
-        uint256 i,
-        uint256 j,
-        uint256 dx,
-        uint256 amp
+    function getDy( uint256 i, uint256 j, uint256 dx, uint256 amp
     ) public view returns (uint256 dy) {
         require(i != j, "same coin");
         require(i < _N_COINS && j < _N_COINS, "invalid index");
