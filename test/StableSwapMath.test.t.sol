@@ -15,8 +15,8 @@ contract StableSwapMathTest is Test {
     function setUp() public {
         pool = new StableSwapMath([uint256(100e18), uint256(100e6), uint256(100e6)]);
         unBalancedpool = new StableSwapMath([uint256(200e18), uint256(100e6), uint256(100e6)]);
-        highlyUnbalancedpool= new StableSwapMath([uint256(2000e18), uint256(100e6), uint256(100e6)]);
-        }
+        highlyUnbalancedpool = new StableSwapMath([uint256(2000e18), uint256(100e6), uint256(100e6)]);
+    }
 
     // _xp() tests
     function testDAIstaysunchanged() public view {
@@ -133,23 +133,24 @@ contract StableSwapMathTest is Test {
         assertGt(y2, y3);
         console.log("Changing A changes the values of y1,y2,y2 obviously because the formula depends on it ");
     }
-    function testadditionviagetYUnbalancedPool() public view {
-        uint256 y = unBalancedpool.getY(0,1,400 ether,A);
-        console.log(y);
-        assertGt(y,0);
-    }
-    function testgetYHighlyUnbalancedPool() public view {
-        uint256 y = highlyUnbalancedpool.getY(0,1,200 ether, A);
-        console.log(y);
-        assertGt(y,0);
-        //1846.088627766239577034e18 =y i.e.token0 drops from 2000 to 200 token1 must increase from 100 to 1846
 
-    }
-    function testadditioninHighlyUnbalancedPool() public view {
-        uint256 y = highlyUnbalancedpool.getY(0,1,2200 ether,A);
-        assertGt(y,0);
+    function testadditionviagetYUnbalancedPool() public view {
+        uint256 y = unBalancedpool.getY(0, 1, 400 ether, A);
         console.log(y);
-        assertLt(y,100 ether);
+        assertGt(y, 0);
     }
-    
+
+    function testgetYHighlyUnbalancedPool() public view {
+        uint256 y = highlyUnbalancedpool.getY(0, 1, 200 ether, A);
+        console.log(y);
+        assertGt(y, 0);
+        //1846.088627766239577034e18 =y i.e.token0 drops from 2000 to 200 token1 must increase from 100 to 1846
+    }
+
+    function testadditioninHighlyUnbalancedPool() public view {
+        uint256 y = highlyUnbalancedpool.getY(0, 1, 2200 ether, A);
+        assertGt(y, 0);
+        console.log(y);
+        assertLt(y, 100 ether);
+    }
 }
