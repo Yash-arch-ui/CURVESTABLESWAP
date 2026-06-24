@@ -6,6 +6,8 @@ contract StableSwapMath {
     uint256 public constant _MAX_ITERATIONS = 255;
     uint256 public constant _N_COINS = 3;
     uint256 public constant DEFAULT_A = 100;
+    uint256 public constant fee = 4_000_000; // 0.04%
+    uint256 public constant FEE_DENOMINATOR = 10_000_000_000;
 
     uint256[3] public balances;
     uint256 public totalSupply;
@@ -68,6 +70,7 @@ contract StableSwapMath {
     }
 
     function get_virtual_price(uint256 lpSupply, uint256 amp) public view returns (uint256) {
+        require(lpSupply > 0 , "ZERO_SUPPLY");
         uint256 D = getD(balances, amp);
         return (D * 1e18) / lpSupply;
     }
@@ -154,6 +157,8 @@ contract StableSwapMath {
         require(i != j, "SAME CURRENCY");
 
         uint256 dy = getDy(i, j, dx, amp);
+        uint256 dy_fee = dy*fee / FEE_DENOMINATOR ;
+        dy -= dy_fee;
 
         balances[i] += dx;
         balances[j] -= dy;
@@ -195,9 +200,9 @@ contract StableSwapMath {
         return lpAmount;
     }
 
-    function addLiquididty(uint256[3] memory amounts_, uint256 amp) public returns (uint256) {
+    function addLiquidity(uint256[3] memory amounts_, uint256 amp) public returns (uint256) {
         uint256 lpMinted = calculateAmountOut(amp, totalSupply, amounts_, true);
-
+        
         for (uint256 i = 0; i < _N_COINS; i++) {
             balances[i] += amounts_[i];
         }
@@ -209,7 +214,7 @@ contract StableSwapMath {
 
     function removeLiquidity(uint256 lpAmount) public returns (uint256[3] memory) {
         require(totalSupply > 0, "NO LIQUIDITY");
-
+        require(lpAmount <= totalSupply, "INSUFFICIENT_LP");
         uint256 share = (lpAmount * 1e18) / totalSupply;
 
         totalSupply -= lpAmount;
@@ -225,12 +230,11 @@ contract StableSwapMath {
     function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp) external returns (uint256 dy) {
         require(i < _N_COINS, "invalid coin");
         require(totalSupply > 0, "no supply");
-
+        require(lpAmount<= totalSupply, "INSUFFICIENT_LP");
         uint256 share = (lpAmount * 1e18) / totalSupply;
 
         totalSupply -= lpAmount;
 
-        uint256[3] memory xp = balances;
         uint256[3] memory newBalances;
 
         for (uint256 k = 0; k < _N_COINS; k++) {
@@ -245,10 +249,26 @@ contract StableSwapMath {
         for (uint256 k = 0; k < _N_COINS; k++) {
             balances[k] = newBalances[k];
         }
-
-        amp;
-        xp;
-
         return dy;
     }
+    function _getYD(uint256 j, uint256[3] memory xp_, uint256 D, uint256 amp)
+    internal pure returns (uint256 y)
+{   // accepts 
+    uint256 Ann = amp * _N_COINS;
+    uint256 c = D;
+    uint256 S_;
+    for (uint256 k = 0; k < _N_COINS; k++) {
+        if (k == j) continue;
+        S_ += xp_[k];
+        c = (c * D) / (xp_[k] * _N_COINS);
+    }
+    c = (c * D) / (Ann * _N_COINS);
+    uint256 b = S_ + (D / Ann);
+    y = D;
+    for (uint256 k = 0; k < _MAX_ITERATIONS; k++) {
+        uint256 yPrev = y;
+        y = (y * y + c) / (2 * y + b - D);
+        if (y > yPrev ? y - yPrev <= 1 : yPrev - y <= 1) break;
+    }
+}
 }
