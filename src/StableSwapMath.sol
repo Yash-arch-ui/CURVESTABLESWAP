@@ -170,13 +170,10 @@ contract StableSwapMath {
         public
         view
         returns (uint256 lpAmount)
-    {
+    { // this basically returns the LPAMount out after adding liquidity.
         uint256[3] memory oldBalances = balances;
-
         uint256 D0 = getD(oldBalances, amp);
-
         uint256[3] memory newBalances = oldBalances;
-
         for (uint256 i = 0; i < _N_COINS; i++) {
             if (deposit) {
                 newBalances[i] += amounts_[i];
@@ -186,11 +183,9 @@ contract StableSwapMath {
         }
 
         uint256 D1 = getD(newBalances, amp);
-
         if (_totalSupply == 0) {
             return D1;
         }
-
         if (deposit) {
             lpAmount = ((D1 - D0) * _totalSupply) / D0;
         } else {
@@ -228,28 +223,28 @@ contract StableSwapMath {
     }
 
     function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp) external returns (uint256 dy) {
-        require(i < _N_COINS, "invalid coin");
+        require(i < _N_COINS, "invalid coin");// I Is basically which pnly coins liwuiidty is to be only removed 
+
         require(totalSupply > 0, "no supply");
         require(lpAmount<= totalSupply, "INSUFFICIENT_LP");
-        uint256 share = (lpAmount * 1e18) / totalSupply;
+        uint256 share = (lpAmount *1e18)/totalSupply;
+        totalSupply-= share;
+        uint256 d0=getD(balances,DEFAULT_A);
+        // sbse pehle balance me se sub kr do 
+        
+        uint256 d1 = (d0 * (1e18 - share)) / 1e18;
+        uint256[3] memory normalizedBalances= _xp(balances);
+        uint256 targetBalancerequired=_getYD(i,normalizedBalances,d1,DEFAULT_A);
+            uint256 dyNormalized = balances[i]-targetBalancerequired;
+            if(i==0){
+                dy=dyNormalized;
+            }
+            else{
+                dy=dyNormalized/_MULTIPLICATION_FACTOR;
+            }
+            balances[i] -= dy;
 
-        totalSupply -= lpAmount;
-
-        uint256[3] memory newBalances;
-
-        for (uint256 k = 0; k < _N_COINS; k++) {
-            uint256 removed = (balances[k] * share) / 1e18;
-            newBalances[k] = balances[k] - removed;
-        }
-
-        uint256 removedAmount = (balances[i] * share) / 1e18;
-
-        dy = removedAmount;
-
-        for (uint256 k = 0; k < _N_COINS; k++) {
-            balances[k] = newBalances[k];
-        }
-        return dy;
+            return dy;
     }
     function _getYD(uint256 j, uint256[3] memory xp_, uint256 D, uint256 amp)
     internal pure returns (uint256 y)
@@ -270,5 +265,6 @@ contract StableSwapMath {
         y = (y * y + c) / (2 * y + b - D);
         if (y > yPrev ? y - yPrev <= 1 : yPrev - y <= 1) break;
     }
+    return y;
 }
 }
