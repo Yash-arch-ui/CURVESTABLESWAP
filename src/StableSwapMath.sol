@@ -212,25 +212,25 @@ contract StableSwapMath {
 
 
 
-    function getD(uint256[3] memory balances_, uint256 amp) external  nonReentrant returns (uint256) {
+    function getD(uint256[3] memory balances_, uint256 amp) external view returns (uint256) {
         return _getD_balances(balances_, amp);
     }
 
-    function getY(uint256 i, uint256 j, uint256 x, uint256 amp) external  nonReentrant returns (uint256) {
+    function getY(uint256 i, uint256 j, uint256 x, uint256 amp) external view returns (uint256) {
         return _getY(i, j, x, amp);
     }
 
-    function getDy(uint256 i, uint256 j, uint256 dx, uint256 amp) external  nonReentrant returns (uint256) {
+    function getDy(uint256 i, uint256 j, uint256 dx, uint256 amp) external view returns (uint256) {
         return _getDy(i, j, dx, amp);
     }
 
-    function calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit) external  nonReentrant returns (uint256) {
+    function calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit) external view returns (uint256) {
         return _calculateAmountOut(amp, _totalSupply, amounts_, deposit);
     }
 
 
 
-    function get_virtual_price(uint256 lpSupply, uint256 amp) public  nonReentrant returns (uint256) {
+    function get_virtual_price(uint256 lpSupply, uint256 amp) external view returns (uint256) {
         require(lpSupply > 0 , "ZERO_SUPPLY");
         uint256 D = _getD_balances(balances, amp);
         return (D * 1e18) / lpSupply;
@@ -281,7 +281,6 @@ contract StableSwapMath {
             amounts[i] = (balances[i] * share) / 1e18;
             balances[i] -= amounts[i];
             if(amounts[i] > 0){
-                IERC20(coins[i]).transfer(msg.sender, amounts[i]);
                 require( IERC20(coins[i]).transfer(msg.sender, amounts[i]), "Transfer failed");
             }
         }
@@ -313,7 +312,6 @@ contract StableSwapMath {
         }
         
         balances[i] -= dy;
-        IERC20(coins[i]).transfer(msg.sender,dy);
         require(IERC20(coins[i]).transfer(msg.sender,dy) , "Transfer Failed ");
         return dy;
     }
