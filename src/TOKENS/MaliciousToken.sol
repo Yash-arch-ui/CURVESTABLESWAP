@@ -7,7 +7,6 @@ contract MaliciousToken {
 
     StableSwapMath public pool;
     bool internal attacked;
-
     enum AttackType {
         None,
         Exchange,
@@ -106,6 +105,7 @@ contract MaliciousToken {
             else if (attackType == AttackType.RemoveLiquidity) {
                 pool.removeLiquidity(1e18);
             }
+
         }
 
         return true;
