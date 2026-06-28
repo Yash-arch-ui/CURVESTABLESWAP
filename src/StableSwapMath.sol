@@ -261,8 +261,9 @@ contract StableSwapMath {
         uint256 lpMinted = _calculateAmountOut(amp, totalSupply, amounts_, true);
         
         for (uint256 i = 0; i < _N_COINS; i++) {
-            IERC20(coins[i]).transferFrom(msg.sender, address(this), amounts_[i]);
             balances[i] += amounts_[i];
+            IERC20(coins[i]).transferFrom(msg.sender, address(this), amounts_[i]);
+
         }
 
         totalSupply += lpMinted;

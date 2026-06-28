@@ -15,14 +15,14 @@ contract StableSwapMathTest is Test {
     uint256 public constant deposit_one = 100e18;
     uint256 public constant deposit_two = 100e6;
     uint256 public constant A = 100; // amp constant
-     function setPool(address _pool) external {
-        pool =StableSwapMath(_pool);
-     }
+    MaliciousToken badToken;
+    NormalToken usdc;
+    NormalToken usdt;
     function setUp() public {
         // We must pass 3 dummy addresses to satisfy the new constructor
-        MaliciousToken badToken = new MaliciousToken();
-        NormalToken usdc = new NormalToken();
-        NormalToken usdt = new NormalToken();
+        badToken = new MaliciousToken();
+        usdc = new NormalToken();
+        usdt = new NormalToken();
         address[3] memory tokens =[
             address(badToken), address(usdc),address(usdt)
         ];
@@ -37,14 +37,24 @@ contract StableSwapMathTest is Test {
     }
 
     function testMaliciousReentry() public  {
+        badToken.setAttackType(MaliciousToken.AttackType.Exchange);
         vm.expectRevert("Reentrancy detected");
         pool.exchange(0,1,10e18,A);
     }
 
     function testReentrancyOnAddLiquidity() public {
+    badToken.setAttackType(MaliciousToken.AttackType.AddLiquidity);
     vm.expectRevert("Reentrancy detected");
     pool.addLiquidity([uint256(50e18), uint256(50e6), uint256(50e6)],A);
     }
-     
+    function testCrossfunctionReentrancy() public{
+        badToken.setAttackType(MaliciousToken.AttackType.None);
+        pool.addLiquidity([uint256(50e18),uint256(50e6),uint256(50e6)],A);
+        badToken.resetAttack();
+        badToken.setAttackType(MaliciousToken.AttackType.RemoveLiquidity);
+        vm.expectRevert("Reentrancy detected");
+        pool.exchange(0,1,10e18,A);
+    }
+    
     
 }
