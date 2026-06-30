@@ -13,7 +13,7 @@ contract MaliciousToken {
         AddLiquidity,
         RemoveLiquidity
     }
-
+    
     AttackType public attackType;
     mapping(address => uint256) public balanceOf;
     constructor() {
@@ -34,6 +34,7 @@ contract MaliciousToken {
     function mint(address to, uint256 amount) external {
         balanceOf[to] += amount;
     }
+
 
     function transfer(address to, uint256 amount)
         external
