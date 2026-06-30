@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 contract NormalToken {
-
     mapping(address => uint256) public balanceOf;
 
     constructor() {
@@ -22,12 +21,7 @@ contract NormalToken {
         return true;
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) external returns (bool) {
-
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         require(balanceOf[from] >= amount, "Not enough balance");
 
         balanceOf[from] -= amount;

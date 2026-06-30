@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
-interface IERC20{
-        function transfer(address to, uint256 amount) external returns(bool);
-        function transferFrom(address from , address to , uint256 amount) external returns(bool);
-    }
+
+interface IERC20 {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
 contract StableSwapMath {
     uint256 public constant _MULTIPLICATION_FACTOR = 1e12;
     uint256 public constant _MAX_ITERATIONS = 255;
@@ -17,13 +19,11 @@ contract StableSwapMath {
     uint256[3] public balances;
     uint256 public totalSupply;
     uint256[3] public amounts;
-    address[3] public coins;// Added array to track the actual ERC20 token addresses
+    address[3] public coins; // Added array to track the actual ERC20 token addresses
 
-
-    
-    constructor(uint256[3] memory initialBalances,address[3] memory initialCoins) {
+    constructor(uint256[3] memory initialBalances, address[3] memory initialCoins) {
         balances = initialBalances;
-        coins=initialCoins;
+        coins = initialCoins;
         totalSupply = 0;
     }
 
@@ -164,11 +164,15 @@ contract StableSwapMath {
         return dy;
     }
 
-    function _calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit) internal view returns (uint256 lpAmount) {
+    function _calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit)
+        internal
+        view
+        returns (uint256 lpAmount)
+    {
         uint256[3] memory oldBalances = balances;
         uint256 D0 = _getD_balances(oldBalances, amp);
         uint256[3] memory newBalances = oldBalances;
-        
+
         for (uint256 i = 0; i < _N_COINS; i++) {
             if (deposit) {
                 newBalances[i] += amounts_[i];
@@ -210,8 +214,6 @@ contract StableSwapMath {
         return y;
     }
 
-
-
     function getD(uint256[3] memory balances_, uint256 amp) external view returns (uint256) {
         return _getD_balances(balances_, amp);
     }
@@ -224,14 +226,16 @@ contract StableSwapMath {
         return _getDy(i, j, dx, amp);
     }
 
-    function calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit) external view returns (uint256) {
+    function calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit)
+        external
+        view
+        returns (uint256)
+    {
         return _calculateAmountOut(amp, _totalSupply, amounts_, deposit);
     }
 
-
-
     function get_virtual_price(uint256 lpSupply, uint256 amp) external view returns (uint256) {
-        require(lpSupply > 0 , "ZERO_SUPPLY");
+        require(lpSupply > 0, "ZERO_SUPPLY");
         uint256 D = _getD_balances(balances, amp);
         return (D * 1e18) / lpSupply;
     }
@@ -240,8 +244,7 @@ contract StableSwapMath {
         require(i != j, "SAME CURRENCY");
         require(i < _N_COINS && j < _N_COINS, "INVALID");
         //S1
-        IERC20(coins[i]).transferFrom(msg.sender, address(this),dx);
-
+        IERC20(coins[i]).transferFrom(msg.sender, address(this), dx);
 
         // Calls the internal version to bypass lock
         //S2
@@ -251,7 +254,7 @@ contract StableSwapMath {
 
         balances[i] += dx;
         balances[j] -= dy;
-        IERC20(coins[j]).transfer(msg.sender,dy);
+        IERC20(coins[j]).transfer(msg.sender, dy);
 
         return dy;
     }
@@ -259,11 +262,10 @@ contract StableSwapMath {
     function addLiquidity(uint256[3] memory amounts_, uint256 amp) public nonReentrant returns (uint256) {
         // Calls the internal version to bypass lock
         uint256 lpMinted = _calculateAmountOut(amp, totalSupply, amounts_, true);
-        
+
         for (uint256 i = 0; i < _N_COINS; i++) {
             balances[i] += amounts_[i];
             IERC20(coins[i]).transferFrom(msg.sender, address(this), amounts_[i]);
-
         }
 
         totalSupply += lpMinted;
@@ -281,15 +283,19 @@ contract StableSwapMath {
         for (uint256 i = 0; i < _N_COINS; i++) {
             amounts[i] = (balances[i] * share) / 1e18;
             balances[i] -= amounts[i];
-            if(amounts[i] > 0){
-                require( IERC20(coins[i]).transfer(msg.sender, amounts[i]), "Transfer failed");
+            if (amounts[i] > 0) {
+                require(IERC20(coins[i]).transfer(msg.sender, amounts[i]), "Transfer failed");
             }
         }
 
         return amounts;
     }
 
-    function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp) external nonReentrant returns (uint256 dy) {
+    function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp)
+        external
+        nonReentrant
+        returns (uint256 dy)
+    {
         require(i < _N_COINS, "invalid coin");
         require(totalSupply > 0, "no supply");
         require(lpAmount <= totalSupply, "INSUFFICIENT_LP");
@@ -299,21 +305,21 @@ contract StableSwapMath {
 
         // Calls the internal version to bypass lock
         uint256 d0 = _getD_balances(balances, DEFAULT_A);
-        
+
         uint256 d1 = (d0 * (1e18 - share)) / 1e18;
         uint256[3] memory normalizedBalances = _xp(balances);
         uint256 targetBalancerequired = _getYD(i, normalizedBalances, d1, DEFAULT_A);
-        
+
         uint256 dyNormalized = normalizedBalances[i] - targetBalancerequired;
-        
+
         if (i == 0) {
             dy = dyNormalized;
         } else {
             dy = dyNormalized / _MULTIPLICATION_FACTOR;
         }
-        
+
         balances[i] -= dy;
-        require(IERC20(coins[i]).transfer(msg.sender,dy) , "Transfer Failed ");
+        require(IERC20(coins[i]).transfer(msg.sender, dy), "Transfer Failed ");
         return dy;
     }
 }

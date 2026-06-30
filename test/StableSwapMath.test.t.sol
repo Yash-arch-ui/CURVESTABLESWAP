@@ -8,7 +8,7 @@ contract StableSwapMathTest is Test {
     StableSwapMath pool;
     StableSwapMath unBalancedpool;
     StableSwapMath highlyUnbalancedpool;
-    
+
     uint256 public constant precision = 1e12;
     uint256 public constant deposit_one = 100e18;
     uint256 public constant deposit_two = 100e6;
