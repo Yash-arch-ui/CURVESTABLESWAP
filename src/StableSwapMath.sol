@@ -6,8 +6,11 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
+// Curve-style stableswap invariant math for a 3-coin pool
 contract StableSwapMath {
+    // Scales token decimals up so all coins are compared at a common precision
     uint256 public constant _MULTIPLICATION_FACTOR = 1e12;
+    // Newton's method converges fast; cap iterations as a safety bound
     uint256 public constant _MAX_ITERATIONS = 255;
     uint256 public constant _N_COINS = 3;
     uint256 public constant DEFAULT_A = 100;
@@ -19,7 +22,8 @@ contract StableSwapMath {
     uint256[3] public balances;
     uint256 public totalSupply;
     uint256[3] public amounts;
-    address[3] public coins; // Added array to track the actual ERC20 token addresses
+    // Actual ERC20 token addresses held by this pool
+    address[3] public coins;
 
     constructor(uint256[3] memory initialBalances, address[3] memory initialCoins) {
         balances = initialBalances;
@@ -27,7 +31,7 @@ contract StableSwapMath {
         totalSupply = 0;
     }
 
-    // Fixed the modifier logic to correctly utilize the boolean flag
+    // Guards against reentrancy using a simple lock flag
     modifier nonReentrant() {
         require(!_locked, "Reentrancy detected");
         _locked = true;
@@ -35,6 +39,7 @@ contract StableSwapMath {
         _locked = false;
     }
 
+    // Normalize raw balances to a common precision (coin 0 stays, others scaled up)
     function _xp(uint256[3] memory _balances) public pure returns (uint256[3] memory xp) {
         xp[0] = _balances[0];
         xp[1] = _balances[1] * _MULTIPLICATION_FACTOR;
@@ -42,6 +47,8 @@ contract StableSwapMath {
         return xp;
     }
 
+    // Computes invariant D via Newton's iteration on the stableswap equation.
+    // D stays roughly constant when prices are ~1:1; it equals the total liquidity.
     function _getD(uint256[3] memory xp, uint256 amp) public pure returns (uint256 D) {
         uint256 S;
 
@@ -65,6 +72,7 @@ contract StableSwapMath {
 
             uint256 Dprev = D;
 
+            // Newton step: refines D until the change between iterations is <= 1
             D = ((Ann * S + D_P * _N_COINS) * D) / ((Ann - 1) * D + (_N_COINS + 1) * D_P);
 
             if (D > Dprev) {
@@ -81,11 +89,14 @@ contract StableSwapMath {
         return D;
     }
 
+    // Convenience wrapper: computes D directly from raw balances
     function _getD_balances(uint256[3] memory balances_, uint256 amp) internal pure returns (uint256) {
         uint256[3] memory xp = _xp(balances_);
         return _getD(xp, amp);
     }
 
+    // Solves for the balance of coin j after swapping x of coin i into the pool.
+    // Uses the invariant D (held constant) and Newton's method to find the new y.
     function _getY(uint256 i, uint256 j, uint256 x, uint256 amp) internal view returns (uint256 y) {
         require(i != j, "same coin");
         require(i < _N_COINS, "INVALID");
@@ -99,6 +110,8 @@ contract StableSwapMath {
         uint256 c = D;
         uint256 S_;
 
+        // Build the sum and product terms over all coins except j
+        // (coin i uses the new amount x, coin j is excluded as the unknown)
         for (uint256 idx = 0; idx < _N_COINS; idx++) {
             uint256 currentX;
 
@@ -115,14 +128,14 @@ contract StableSwapMath {
         }
 
         c = (c * D) / (Ann * _N_COINS);
-
         uint256 b = S_ + (D / Ann);
 
+        // Newton iteration to converge on the new balance y
         y = D;
 
         for (uint256 k = 0; k < _MAX_ITERATIONS; k++) {
             uint256 yPrev = y;
-
+ 
             y = (y * y + c) / ((2 * y) + b - D);
 
             if (y > yPrev) {
@@ -139,6 +152,7 @@ contract StableSwapMath {
         return y;
     }
 
+    // Returns how many coins of j come out when dx of coin i goes in, after normalization.
     function _getDy(uint256 i, uint256 j, uint256 dx, uint256 amp) internal view returns (uint256 dy) {
         require(i != j, "same coin");
         require(i < _N_COINS && j < _N_COINS, "invalid index");
@@ -146,6 +160,7 @@ contract StableSwapMath {
         uint256[3] memory xp = _xp(balances);
         uint256 x = xp[i];
 
+        // Scale dx to normalized precision, then find the new pool state
         if (i == 0) {
             x += dx;
         } else {
@@ -153,8 +168,10 @@ contract StableSwapMath {
         }
 
         uint256 y = _getY(i, j, x, amp);
+        // Difference between old and new balance of j is the output amount
         uint256 dyNormalized = xp[j] - y;
 
+        // Convert back to the token's native decimals
         if (j == 0) {
             dy = dyNormalized;
         } else {
@@ -164,12 +181,15 @@ contract StableSwapMath {
         return dy;
     }
 
+    // Mints (deposit) or burns (withdraw) LP tokens proportional to the change in D.
+    // On first deposit with zero supply, LP minted simply equals D1.
     function _calculateAmountOut(uint256 amp, uint256 _totalSupply, uint256[3] memory amounts_, bool deposit)
         internal
         view
         returns (uint256 lpAmount)
     {
         uint256[3] memory oldBalances = balances;
+        // D0 = invariant before, D1 = invariant after applying the deposit/withdrawal
         uint256 D0 = _getD_balances(oldBalances, amp);
         uint256[3] memory newBalances = oldBalances;
 
@@ -194,6 +214,7 @@ contract StableSwapMath {
         return lpAmount;
     }
 
+    // Solves for the balance of coin j when D changes (e.g. LP withdrawal of one coin)
     function _getYD(uint256 j, uint256[3] memory xp_, uint256 D, uint256 amp) internal pure returns (uint256 y) {
         uint256 Ann = amp * _N_COINS;
         uint256 c = D;
@@ -206,6 +227,7 @@ contract StableSwapMath {
         c = (c * D) / (Ann * _N_COINS);
         uint256 b = S_ + (D / Ann);
         y = D;
+        // Same Newton iteration as _getY, but with D given instead of derived
         for (uint256 k = 0; k < _MAX_ITERATIONS; k++) {
             uint256 yPrev = y;
             y = (y * y + c) / (2 * y + b - D);
@@ -214,6 +236,7 @@ contract StableSwapMath {
         return y;
     }
 
+    // Public read-only wrappers around the internal math
     function getD(uint256[3] memory balances_, uint256 amp) external view returns (uint256) {
         return _getD_balances(balances_, amp);
     }
@@ -234,12 +257,14 @@ contract StableSwapMath {
         return _calculateAmountOut(amp, _totalSupply, amounts_, deposit);
     }
 
+    // LP token price in 1e18 terms: invariant D per LP unit
     function get_virtual_price(uint256 lpSupply, uint256 amp) external view returns (uint256) {
         require(lpSupply > 0, "ZERO_SUPPLY");
         uint256 D = _getD_balances(balances, amp);
         return (D * 1e18) / lpSupply;
     }
 
+    // Swap dx of coin i for dy of coin j: pulls tokens in, applies fee, sends output out
     function exchange(uint256 i, uint256 j, uint256 dx, uint256 amp) public nonReentrant returns (uint256) {
         require(i != j, "SAME CURRENCY");
         require(i < _N_COINS && j < _N_COINS, "INVALID");
@@ -249,6 +274,7 @@ contract StableSwapMath {
         // Calls the internal version to bypass lock
         //S2
         uint256 dy = _getDy(i, j, dx, amp);
+        // Deduct the swap fee from the output amount
         uint256 dy_fee = dy * fee / FEE_DENOMINATOR;
         dy -= dy_fee;
 
@@ -259,6 +285,7 @@ contract StableSwapMath {
         return dy;
     }
 
+    // Deposit all three coins and mint LP tokens based on the resulting D increase
     function addLiquidity(uint256[3] memory amounts_, uint256 amp) public nonReentrant returns (uint256) {
         // Calls the internal version to bypass lock
         uint256 lpMinted = _calculateAmountOut(amp, totalSupply, amounts_, true);
@@ -273,9 +300,11 @@ contract StableSwapMath {
         return lpMinted;
     }
 
+    // Burn LP tokens and withdraw a proportional share of every coin in the pool
     function removeLiquidity(uint256 lpAmount) public nonReentrant returns (uint256[3] memory) {
         require(totalSupply > 0, "NO LIQUIDITY");
         require(lpAmount <= totalSupply, "INSUFFICIENT_LP");
+        // Caller's ownership fraction in 1e18 precision
         uint256 share = (lpAmount * 1e18) / totalSupply;
 
         totalSupply -= lpAmount;
@@ -291,6 +320,7 @@ contract StableSwapMath {
         return amounts;
     }
 
+    // Burn LP tokens and withdraw only coin i, using _getYD to keep the invariant balanced
     function removeLiquidityOneCoin(uint256 lpAmount, uint256 i, uint256 amp)
         external
         nonReentrant
@@ -302,16 +332,19 @@ contract StableSwapMath {
 
         uint256 share = (lpAmount * 1e18) / totalSupply;
         totalSupply -= lpAmount;
-
+        
         // Calls the internal version to bypass lock
+        // D0 = current invariant; d1 = what D should be after removing the LP share
         uint256 d0 = _getD_balances(balances, DEFAULT_A);
 
         uint256 d1 = (d0 * (1e18 - share)) / 1e18;
         uint256[3] memory normalizedBalances = _xp(balances);
+        // New balance of coin i that satisfies the reduced invariant d1
         uint256 targetBalancerequired = _getYD(i, normalizedBalances, d1, DEFAULT_A);
 
         uint256 dyNormalized = normalizedBalances[i] - targetBalancerequired;
 
+        // Convert from normalized precision back to the token's native decimals
         if (i == 0) {
             dy = dyNormalized;
         } else {
